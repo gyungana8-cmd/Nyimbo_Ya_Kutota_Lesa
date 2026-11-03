@@ -1,40 +1,40 @@
-
-name: Build NYIMBO YA KUTOTA LESA APK
+name: Publish Nyimbo Ya Kutota Lesa PWA
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
-  build:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract Android project
-        run: |
-          mkdir -p source
-          unzip -q NYIMBO_YA_KUTOTA_LESA_Android_Project.zip -d source
-          echo "PROJECT_DIR=$(find source -mindepth 1 -maxdepth 1 -type d | head -n 1)" >> "$GITHUB_ENV"
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - name: Upload website files
+        uses: actions/upload-pages-artifact@v3
         with:
-          distribution: temurin
-          java-version: '17'
+          path: .
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Build APK
-        run: |
-          cd "$PROJECT_DIR"
-          gradle assembleDebug --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: NYIMBO_YA_KUTOTA_LESA-APK
-          path: source/**/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+      - name: Deploy website
+        id: deployment
+        uses: actions/deploy-pages@v4
