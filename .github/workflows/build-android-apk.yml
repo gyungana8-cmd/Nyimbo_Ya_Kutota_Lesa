@@ -1,0 +1,79 @@
+name: Build NYIMBO Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/build-android-apk.yml"
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: android-wrapper/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Extract hymnbook website
+        run: |
+          set -euo pipefail
+          APP_ZIP=""
+          if [ -f "NYIMBO_YA_KUTOTA_LESA_PWA_OPTIMIZED.zip" ]; then
+            APP_ZIP="NYIMBO_YA_KUTOTA_LESA_PWA_OPTIMIZED.zip"
+          elif [ -f "NYIMBO_YA_KUTOTA_LESA_PWA.zip" ]; then
+            APP_ZIP="NYIMBO_YA_KUTOTA_LESA_PWA.zip"
+          else
+            echo "PWA ZIP package not found in repository root"
+            exit 1
+          fi
+          mkdir -p extracted android-wrapper/www
+          unzip -q "$APP_ZIP" -d extracted
+          INDEX_FILE="$(find extracted -type f -name index.html -print -quit)"
+          if [ -z "$INDEX_FILE" ]; then
+            echo "index.html not found in PWA ZIP"
+            exit 1
+          fi
+          APP_DIR="$(dirname "$INDEX_FILE")"
+          cp -a "$APP_DIR"/. android-wrapper/www/
+          test -f android-wrapper/www/index.html
+
+      - name: Install Capacitor Android wrapper
+        working-directory: android-wrapper
+        run: |
+          set -euo pipefail
+          npm init -y
+          npm install @capacitor/core @capacitor/android
+          npm install --save-dev @capacitor/cli
+          npx cap init "Nyimbo Ya Kutota Lesa" "zm.gerald.yungana.nyimbo" --web-dir=www
+          npx cap add android
+          npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android-wrapper/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NYIMBO-YA-KUTOTA-LESA-Android-APK
+          path: android-wrapper/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
